@@ -64,8 +64,6 @@
 - Edit `input/config.toml` to tune threads / proxy settings
 - Run `cookie-checker.exe`
 
-> No Python, no dependencies — single self-contained binary.
-
 #### Option B — Build from source (Go)
 
 **Requirements:** [Go 1.21+](https://go.dev/dl/)
