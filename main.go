@@ -37,12 +37,6 @@ type cfg struct {
 		Mode string `toml:"mode"`
 		URL  string `toml:"url"`
 		File string `toml:"file"`
-		// Rotate disables HTTP keep-alive so every request opens a fresh TCP
-		// connection. On a rotating residential proxy each new connection gets a
-		// different IP, spreading load and avoiding per-IP rate limits.
-		// Set to false if you have a large static proxy pool (one IP per worker)
-		// and want faster connection reuse — false is quicker but requires enough
-		// proxies so no single IP gets hammered.
 		Rotate bool `toml:"rotate"`
 	} `toml:"proxy"`
 	Input struct {
@@ -346,9 +340,6 @@ func retryDelay(attempt int, err string) time.Duration {
 
 // ─── async writer ─────────────────────────────────────────────────────────────
 
-// writerLoop drains the results channel, writes valid/invalid to disk, and
-// triggers input-file cleanup every cleanupEvery definitive results.
-// Running as a single goroutine means zero lock contention on file writes.
 func writerLoop(
 	results <-chan Result,
 	validPath, invalidPath, cookiesFile string,
@@ -398,7 +389,6 @@ func writerLoop(
 		}
 	}
 
-	// Final flush — wait for any in-flight cleanup first
 	for !atomic.CompareAndSwapInt32(&cleanupRunning, 0, 1) {
 		time.Sleep(50 * time.Millisecond)
 	}
@@ -409,8 +399,6 @@ func writerLoop(
 	if inf != nil { inf.Close() }
 }
 
-// rewriteInput rewrites the input file keeping only entries NOT in done.
-// Errored cookies (not in done) stay so they can be retried next run.
 func rewriteInput(cookiesFile string, allEntries []Entry, done map[string]struct{}) {
 	var remaining []Entry
 	for _, e := range allEntries {
@@ -443,8 +431,6 @@ func rewriteInput(cookiesFile string, allEntries []Entry, done map[string]struct
 // ─── main ─────────────────────────────────────────────────────────────────────
 
 func main() {
-	// Resolve paths relative to the exe location so the binary works
-	// regardless of what directory you launch it from.
 	exePath, _ := os.Executable()
 	exeDir := filepath.Dir(exePath)
 	resolve := func(p string) string {
@@ -568,7 +554,6 @@ func main() {
 	total := int64(len(entries))
 	var clientIdx int64
 
-	// results feeds the single writer goroutine — no lock contention on writes
 	results := make(chan Result, c.Run.Threads*4)
 	var writerDone sync.WaitGroup
 	writerDone.Add(1)
@@ -643,7 +628,6 @@ func main() {
 	close(work)
 	wg.Wait()
 
-	// Close results channel and wait for writer to finish final cleanup
 	close(results)
 	writerDone.Wait()
 
