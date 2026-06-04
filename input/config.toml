@@ -1,0 +1,24 @@
+[run]
+threads   = 200
+count     = 0        # 0 = all
+timeout_s = 10.0
+debug     = false
+
+[proxy]
+mode   = "pool"      # none | fixed | pool
+url    = ""
+file   = "input/proxies.txt"
+# rotate = true  → new TCP connection per request, rotating proxy gets a fresh
+# IP each time (best for residential rotating proxies, avoids per-IP 429s).
+# rotate = false → reuse connections (faster, less TLS overhead) but all
+# requests share the same IP — only use with a large static pool where each
+# worker has its own dedicated proxy.
+rotate = true
+
+[input]
+cookies_file = "input/cookies.txt"
+
+[output]
+dir          = "output"
+valid_file   = "valid.txt"
+invalid_file = "invalid.txt"
