@@ -90,7 +90,7 @@ go build -o cookie-checker.exe .
 ---
 
 ### 🔥 Features
-
+- Works proxyless
 - Single HTTP request per cookie (`economy.roblox.com/v1/user/currency`) — validates and retrieves Robux in one shot
 - Concurrent goroutines — handles 200+ threads with minimal memory overhead
 - Rotating proxy support — `rotate = true` opens a fresh TCP connection per request so every request gets a new exit IP
@@ -209,6 +209,10 @@ valid_file   = "valid.txt"
 invalid_file = "invalid.txt"
 ```
 
+### 📹 Preview
+
+![Preview](https/i.imgur.com/tpcwEwv.gif)
+
 ---
 
 ### ❗ Disclaimers
@@ -224,6 +228,8 @@ invalid_file = "invalid.txt"
 ```diff
 v0.0.1 ⋮ 06/04/2026
 ! Initial release.
+v0.0.2 ⋮ 06/09/2026
++ Added persona locked 
 ```
 
 <p align="center">

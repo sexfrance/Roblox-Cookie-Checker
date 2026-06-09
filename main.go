@@ -43,9 +43,11 @@ type cfg struct {
 		CookiesFile string `toml:"cookies_file"`
 	} `toml:"input"`
 	Output struct {
-		Dir         string `toml:"dir"`
-		ValidFile   string `toml:"valid_file"`
-		InvalidFile string `toml:"invalid_file"`
+		Dir          string `toml:"dir"`
+		ValidFile    string `toml:"valid_file"`
+		InvalidFile  string `toml:"invalid_file"`
+		LockedFile   string `toml:"locked_file"`
+		MergeLocked  bool   `toml:"merge_locked"`
 	} `toml:"output"`
 }
 
@@ -61,6 +63,7 @@ func loadConfig(path string) cfg {
 	c.Output.Dir = "output"
 	c.Output.ValidFile = "valid.txt"
 	c.Output.InvalidFile = "invalid.txt"
+	c.Output.LockedFile = "locked.txt"
 	if _, err := os.Stat(path); err == nil {
 		toml.DecodeFile(path, &c)
 	}
@@ -80,6 +83,7 @@ type Entry struct {
 type Result struct {
 	Entry
 	Valid  bool
+	Locked bool
 	Robux  int64
 	Err    string
 	Ms     int64
@@ -250,9 +254,9 @@ func loadCookies(path string) []Entry {
 	return out
 }
 
-func loadSeen(validPath, invalidPath string) map[string]struct{} {
+func loadSeen(validPath, invalidPath, lockedPath string) map[string]struct{} {
 	seen := make(map[string]struct{})
-	for _, path := range []string{validPath, invalidPath} {
+	for _, path := range []string{validPath, invalidPath, lockedPath} {
 		f, err := os.Open(path)
 		if err != nil {
 			continue
@@ -301,6 +305,11 @@ func checkCookie(client *http.Client, cookie string) Result {
 		r.Err = "invalid cookie (401)"
 		return r
 	}
+	if resp.StatusCode == 403 {
+		r.Locked = true
+		r.Err = "persona locked (403)"
+		return r
+	}
 	if resp.StatusCode == 429 {
 		r.Err = "rate limited (429)"
 		return r
@@ -342,12 +351,17 @@ func retryDelay(attempt int, err string) time.Duration {
 
 func writerLoop(
 	results <-chan Result,
-	validPath, invalidPath, cookiesFile string,
+	validPath, invalidPath, lockedPath, cookiesFile string,
+	mergeLocked bool,
 	allEntries []Entry,
 	cleanupEvery int,
 ) {
-	vf, _ := os.OpenFile(validPath,   os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	vf, _  := os.OpenFile(validPath,   os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	inf, _ := os.OpenFile(invalidPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	var lkf *os.File
+	if !mergeLocked {
+		lkf, _ = os.OpenFile(lockedPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	}
 
 	done := make(map[string]struct{})
 	pending := 0
@@ -383,6 +397,20 @@ func writerLoop(
 			fmt.Fprintln(inf, r.Cookie)
 			done[r.Cookie] = struct{}{}
 			pending++
+		} else if r.Locked {
+			if mergeLocked {
+				fmt.Fprintln(inf, r.Cookie)
+			} else {
+				name := r.Label
+				if name == "" { name = "unknown" }
+				if r.Password != "" {
+					fmt.Fprintf(lkf, "%s:%s:%s\n", name, r.Password, r.Cookie)
+				} else {
+					fmt.Fprintf(lkf, "%s:%s\n", name, r.Cookie)
+				}
+			}
+			done[r.Cookie] = struct{}{}
+			pending++
 		}
 		if pending >= cleanupEvery {
 			flush()
@@ -397,6 +425,7 @@ func writerLoop(
 
 	if vf  != nil { vf.Close() }
 	if inf != nil { inf.Close() }
+	if lkf != nil { lkf.Close() }
 }
 
 func rewriteInput(cookiesFile string, allEntries []Entry, done map[string]struct{}) {
@@ -469,6 +498,7 @@ func main() {
 	outDir      := resolve(c.Output.Dir)
 	validPath   := filepath.Join(outDir, c.Output.ValidFile)
 	invalidPath := filepath.Join(outDir, c.Output.InvalidFile)
+	lockedPath  := filepath.Join(outDir, c.Output.LockedFile)
 
 	// Proxies
 	var proxies []string
@@ -509,7 +539,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	seen := loadSeen(validPath, invalidPath)
+	seen := loadSeen(validPath, invalidPath, lockedPath)
 	var entries []Entry
 	for _, e := range allEntries {
 		if _, ok := seen[e.Cookie]; !ok {
@@ -550,7 +580,7 @@ func main() {
 		return
 	}
 
-	var done, valid, invalid, errs int64
+	var done, valid, invalid, locked, errs int64
 	total := int64(len(entries))
 	var clientIdx int64
 
@@ -559,7 +589,7 @@ func main() {
 	writerDone.Add(1)
 	go func() {
 		defer writerDone.Done()
-		writerLoop(results, validPath, invalidPath, cookiesPath, allEntries, 500)
+		writerLoop(results, validPath, invalidPath, lockedPath, cookiesPath, c.Output.MergeLocked, allEntries, 500)
 	}()
 
 	work := make(chan Entry, c.Run.Threads*2)
@@ -608,6 +638,10 @@ func main() {
 					atomic.AddInt64(&invalid, 1)
 					logLine("DEAD", colRed, fmt.Sprintf(
 						"%s  %dms  %s", display, res.Ms, b))
+				case strings.Contains(res.Err, "persona locked"):
+					atomic.AddInt64(&locked, 1)
+					logLine("LOCKED", colRed, fmt.Sprintf(
+						"%s  %dms  %s", display, res.Ms, b))
 				default:
 					atomic.AddInt64(&errs, 1)
 					errStr := res.Err
@@ -638,6 +672,7 @@ func main() {
 	fmt.Printf("  %-14s %d\n", col(colDim, "total"), atomic.LoadInt64(&done))
 	fmt.Printf("  %-14s %s\n", col(colDim, "valid"), col(colGreen+colBold, fmt.Sprintf("%d", atomic.LoadInt64(&valid))))
 	fmt.Printf("  %-14s %s\n", col(colDim, "invalid"), col(colRed, fmt.Sprintf("%d", atomic.LoadInt64(&invalid))))
+	fmt.Printf("  %-14s %s\n", col(colDim, "locked"), col(colRed, fmt.Sprintf("%d", atomic.LoadInt64(&locked))))
 	fmt.Printf("  %-14s %s\n", col(colDim, "errors"), col(colYellow, fmt.Sprintf("%d", atomic.LoadInt64(&errs))))
 	fmt.Printf("  %-14s %.1f/s  %s  %.1fs\n", col(colDim, "rate"), rate, col(colDim, "·"), elapsed.Seconds())
 	fmt.Printf("  %-14s %s\n", col(colDim, "saved to"), validPath)
