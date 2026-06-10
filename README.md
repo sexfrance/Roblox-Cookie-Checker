@@ -1,5 +1,4 @@
-<!-- SPONSOR-START -->
----
+## <!-- SPONSOR-START -->
 
 <div align="center">
 
@@ -88,6 +87,7 @@ go build -o cookie-checker.exe .
 ---
 
 ### 🔥 Features
+
 - Works proxyless
 - Single HTTP request per cookie (`economy.roblox.com/v1/user/currency`) — validates and retrieves Robux in one shot
 - Concurrent goroutines — handles 200+ threads with minimal memory overhead
@@ -148,18 +148,18 @@ go build -o cookie-checker.exe .
 
 4. **CLI flags**:
 
-   | Flag | Default | Description |
-   | --- | --- | --- |
-   | `--config` | `input/config.toml` | Config file path |
-   | `--threads` | from config | Concurrent goroutines |
-   | `-n` | `0` (all) | Check only first N cookies |
-   | `--cookies` | from config | Input cookies file |
-   | `--proxy-file` | from config | Proxy list file |
-   | `--proxy-url` | — | Single fixed proxy URL |
-   | `--no-proxy` | off | Disable all proxies |
-   | `--output-dir` | from config | Output directory |
-   | `--timeout` | from config | Per-request timeout (seconds) |
-   | `--debug` | off | Show full error messages |
+   | Flag           | Default             | Description                   |
+   | -------------- | ------------------- | ----------------------------- |
+   | `--config`     | `input/config.toml` | Config file path              |
+   | `--threads`    | from config         | Concurrent goroutines         |
+   | `-n`           | `0` (all)           | Check only first N cookies    |
+   | `--cookies`    | from config         | Input cookies file            |
+   | `--proxy-file` | from config         | Proxy list file               |
+   | `--proxy-url`  | —                   | Single fixed proxy URL        |
+   | `--no-proxy`   | off                 | Disable all proxies           |
+   | `--output-dir` | from config         | Output directory              |
+   | `--timeout`    | from config         | Per-request timeout (seconds) |
+   | `--debug`      | off                 | Show full error messages      |
 
 ---
 
@@ -209,7 +209,7 @@ invalid_file = "invalid.txt"
 
 ### 📹 Preview
 
-![Preview](https/i.imgur.com/tpcwEwv.gif)
+![Preview](assets/preview.gif)
 
 ---
 
@@ -227,7 +227,7 @@ invalid_file = "invalid.txt"
 v0.0.1 ⋮ 06/04/2026
 ! Initial release.
 v0.0.2 ⋮ 06/09/2026
-+ Added persona locked 
++ Added persona locked
 ```
 
 <p align="center">
